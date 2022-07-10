@@ -12,6 +12,8 @@ output:
     toc: true
     toc_depth: 3
 subtitle: Data Analytics Report
+bibliography: D214-BibTeX.bib
+csl: apa-manual.csl
 ---
 
 
@@ -19,6 +21,69 @@ subtitle: Data Analytics Report
 ***
 # Introduction
 ***
+
+## Initial Preparation
+
+```{r Useful Libraries}
+# Data Manipulation
+library(tidyverse)
+
+# Visualization Formatting
+library(gridExtra)
+
+# Visualization Font Import
+library(sysfonts)
+library(showtextdb)
+library(showtext)
+font_add("LM Roman 10", "./lmroman10-regular.otf")
+```
+
+
+```{r Import Data, message=FALSE}
+df <- read_csv('./zeek.csv', col_names = TRUE)
+```
+
+```{r Subset Data}
+df.conn   <- subset(df, bdp.ingest.file.name == "conn.log")
+df.dns    <- subset(df, bdp.ingest.file.name == "dns.log")
+df.files  <- subset(df, bdp.ingest.file.name == "files.log")
+df.http   <- subset(df, bdp.ingest.file.name == "http.log")
+df.ssh    <- subset(df, bdp.ingest.file.name == "ssh.log")
+df.ssl    <- subset(df, bdp.ingest.file.name == "ssl.log")
+df.weird  <- subset(df, bdp.ingest.file.name == "weird.log")
+```
+
+
+
+
+
+```{r}
+library(visdat)
+
+vis_dat(df, warn_large_data = FALSE)
+```
+
+```{r Conn Cleaning}
+df.conn.clean <- df.conn %>% select(-c(dns.answers.names, dns.answers.ttls, dns.flags.authoritative, dns.flags.recursion.available, dns.flags.recursion.desired, dns.flags.rejected, dns.flags.truncated.response, dns.flags.z_bit, dns.id, dns.question.class, dns.question.class_code, dns.question.name, dns.question.name_reverse, dns.question.registered_domain, dns.question.registered_domain_reverse, dns.question.type, dns.question.type_code, dns.response_code, dns.status_code, event.outcome, file.hash.md5, file.hash.sha1, file.mime_type, file.size, files.analyzers, files.depth, files.is_originating, files.local_origin, files.missing_bytes, files.overflow_bytes, files.seen_bytes, files.timedout, http.request.body.bytes, http.response.body.bytes, http.response.mime_type, http.response.status_code, http.response.status_name, http.transaction_depth, http.version, log.id.conn_uids, log.id.resp_fuids, ssh.auth_attempts, ssh.client, tls.cipher, tls.curve, tls.established, tls.next_protocol, tls.resumed, tls.validation_status, tls.version, undef.cert_chain_fps, undef.ssl_history, weird.name, weird.notice, cert_chain_fps, destination.domain, destination.domain_reverse, dns.answers.names_reverse, source.geo.ccmd, source.geo.country_name, weird.peer, source.as.number, source.geo.location.lat, source.geo.location.lon))
+
+vis_dat(df.conn.clean, warn_large_data = FALSE)
+```
+
+The cleaned connection logs are `r (sum(is.na(df.conn.clean) == TRUE) / sum(is.na(df.conn.clean) == FALSE)) * 100`% sparse.
+
+
+
+```{r}
+df.dns.clean <- df.dns %>% select(-c(connection.local_orig, connection.local_resp, destination.as.nunber, destination.bytes, destination.geo.ccmd, destination.geo.country_name, destination.geo.location.lat, destination.geo.location.lon, destination.ip_bytes, destination.packets, file.hash.md5, file.hash.sha1, file.mime_type, file.size, files.analyzers, files.depth, files.is_originating, files.local_origin, files.missing_bytes, files.overflow_bytes, files.seen_bytes, files.timedout, http.request.body.bytes, http.response.body.bytes, http.response.mime_type, http.response.status_code, http.response.status_name, http.transaction_depth, http.version, log.id.conn_uids, log.id.resp_fuids, network.connection.history, network.connection.state, network.direction, network.missed_bytes, network.protocol, source.as.number, source.bytes, source.geo.ccmd, source.geo.country_name, source.geo.location.lat, source.geo.location.lon, source.ip_bytes, source.packets, ssh.auth_attempts, ssh.client, tls.cipher, tls.curve, tls.established, tls.next_protocol, tls.resumed, tls.validation_status, tls.version, undef.cert_chain_fps, undef.ssl_history, weird.name, weird.notice, cert_chain_fps, weird.peer, dns.question.class, dns.question.type, dns.question.type_code, event.duration))
+
+vis_dat(df.dns.clean, warn_large_data = FALSE)
+```
+
+The cleaned dns logs are `r (sum(is.na(df.dns.clean) == TRUE) / sum(is.na(df.dns.clean) == FALSE)) * 100`% sparse.
+
+
+
+
 
 
 \newpage
@@ -76,5 +141,20 @@ F.  Acknowledge sources, using in-text citations and references, for content tha
 
 G.  Demonstrate professional communication in the content and presentation of your submission.
 
+@Andrews2019Zeek
+@Ghafir2014APT
+@Haas2019Graphs
+@Niu2017APTDNS
+@Soliman2021APT
+@Soliman2020GNN
+@Wu2019ACS
+@Zhao2015DNS
+
+
+
+
 \newpage
+***
 # References
+***
+\  
