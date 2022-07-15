@@ -38,123 +38,257 @@ library(showtext)
 font_add("LM Roman 10", "./lmroman10-regular.otf")
 ```
 
-
-```{r Import Data, message=FALSE}
-df <- read_csv('./zeek.csv', col_names = TRUE)
-```
-
-```{r Subset Data}
-df.conn   <- subset(df, bdp.ingest.file.name == "conn.log")
-df.dns    <- subset(df, bdp.ingest.file.name == "dns.log")
-df.files  <- subset(df, bdp.ingest.file.name == "files.log")
-df.http   <- subset(df, bdp.ingest.file.name == "http.log")
-df.ssh    <- subset(df, bdp.ingest.file.name == "ssh.log")
-df.ssl    <- subset(df, bdp.ingest.file.name == "ssl.log")
-df.weird  <- subset(df, bdp.ingest.file.name == "weird.log")
-```
-
-
-
-
-
-```{r}
-library(visdat)
-
-vis_dat(df, warn_large_data = FALSE)
-```
-
-```{r Conn Cleaning}
-df.conn.clean <- df.conn %>% select(-c(dns.answers.names, dns.answers.ttls, dns.flags.authoritative, dns.flags.recursion.available, dns.flags.recursion.desired, dns.flags.rejected, dns.flags.truncated.response, dns.flags.z_bit, dns.id, dns.question.class, dns.question.class_code, dns.question.name, dns.question.name_reverse, dns.question.registered_domain, dns.question.registered_domain_reverse, dns.question.type, dns.question.type_code, dns.response_code, dns.status_code, event.outcome, file.hash.md5, file.hash.sha1, file.mime_type, file.size, files.analyzers, files.depth, files.is_originating, files.local_origin, files.missing_bytes, files.overflow_bytes, files.seen_bytes, files.timedout, http.request.body.bytes, http.response.body.bytes, http.response.mime_type, http.response.status_code, http.response.status_name, http.transaction_depth, http.version, log.id.conn_uids, log.id.resp_fuids, ssh.auth_attempts, ssh.client, tls.cipher, tls.curve, tls.established, tls.next_protocol, tls.resumed, tls.validation_status, tls.version, undef.cert_chain_fps, undef.ssl_history, weird.name, weird.notice, cert_chain_fps, destination.domain, destination.domain_reverse, dns.answers.names_reverse, source.geo.ccmd, source.geo.country_name, weird.peer, source.as.number, source.geo.location.lat, source.geo.location.lon))
-
-vis_dat(df.conn.clean, warn_large_data = FALSE)
-```
-
-The cleaned connection logs are `r (sum(is.na(df.conn.clean) == TRUE) / sum(is.na(df.conn.clean) == FALSE)) * 100`% sparse.
-
-
-
-```{r}
-df.dns.clean <- df.dns %>% select(-c(connection.local_orig, connection.local_resp, destination.as.nunber, destination.bytes, destination.geo.ccmd, destination.geo.country_name, destination.geo.location.lat, destination.geo.location.lon, destination.ip_bytes, destination.packets, file.hash.md5, file.hash.sha1, file.mime_type, file.size, files.analyzers, files.depth, files.is_originating, files.local_origin, files.missing_bytes, files.overflow_bytes, files.seen_bytes, files.timedout, http.request.body.bytes, http.response.body.bytes, http.response.mime_type, http.response.status_code, http.response.status_name, http.transaction_depth, http.version, log.id.conn_uids, log.id.resp_fuids, network.connection.history, network.connection.state, network.direction, network.missed_bytes, network.protocol, source.as.number, source.bytes, source.geo.ccmd, source.geo.country_name, source.geo.location.lat, source.geo.location.lon, source.ip_bytes, source.packets, ssh.auth_attempts, ssh.client, tls.cipher, tls.curve, tls.established, tls.next_protocol, tls.resumed, tls.validation_status, tls.version, undef.cert_chain_fps, undef.ssl_history, weird.name, weird.notice, cert_chain_fps, weird.peer, dns.question.class, dns.question.type, dns.question.type_code, event.duration))
-
-vis_dat(df.dns.clean, warn_large_data = FALSE)
-```
-
-The cleaned dns logs are `r (sum(is.na(df.dns.clean) == TRUE) / sum(is.na(df.dns.clean) == FALSE)) * 100`% sparse.
-
-
-
-
-
-
 \newpage
 ***
 # Part I: Research Question
 ***
- 
-A.  Summarize the original real-data research question you identified in task 1. Your summary should include justification for the research question you identified in task 1, a description of the context in which the research question exists, and a discussion of your hypothesis.
 
- 
-\newpage
+> Can an agglomerative hierarchical clustering analysis of network Zeek logs function as an effective anomaly detection technique?
+
+## Context
+
+  Network Intrusion Detection Systems (NIDS) are installed as physical devices and/or software applications that monitor network traffic patterns to identify malicious activity so that system administrators can take appropriate actions to ensure the integrity and security of their network (Newton & Schoen, 2022).  The two primary methods that NIDS use to classify threats are signature libraries and anomaly detection.  
+
+  Signature libraries are static definition lists that contain digital fingerprints of known exploits; the NIDS identifies and flags network traffic matching the pattern of any threat definition in the signature library.  This method is effective for known exploits, also known as n-day exploits, because the NIDS can effectively label the traffic as malicious and give the systems administrator an indication of how the compromise occurred and what the intended effect may have been.  However, signature libraries are completely ineffective with respect to zero-day exploits; these attacks are either entirely unknown to cybersecurity specialists or are too new to have been fingerprinted sufficiently well to develop a signature-based detection definition.  For these threats, an anomaly-based methodology is more effective.
+
+  Anomaly-based detection methods measure network activity against an established baseline of normal and authorized traffic patterns; any network or user behavior that does not fall within the scope of the baseline is flagged as suspicious and---therefore---a potential indicator of compromise.  These methods are equally effective against n-day exploits and zero-day exploits.
+
+## Justification
+
+  It is sometimes necessary to assess the security status of a network that does not have a NIDS installed or after a period during which an installed NIDS was inactive.  In this case, without a system monitoring traffic in real time, a packet capture (PCAP) or alternative network logging system can be leveraged.  While PCAP data is the gold standard for network forensics, the effort and expense required to collect and store every packet of network traffic in its entirety limits this kind of application to very narrow and temporary use cases (Sikos, 2020).  The ability to use a more common and accessible logging standard such as Zeek as an input dataset for an anomaly detection algorithm would be an option that carries a significant business value with respect to information assurance, audit compliance, and risk management assessments.
+
+  The contribution of this study to the field of Data Analytics and the MSDA program is to create a clustering model which can identify anomalous network activity from Zeek log data for further investigation by cybersecurity analysts so that potential threats are flagged for remediation before causing significant damage to compromised information systems (The Zeek Project, 2020). This study will use agglomerative hierarchical clustering, an unsupervised machine learning method for data mining, to leverage multiple features of stored Zeek logs in order to create groupings of data points based on their relative similarity in order to isolate any anomalous network activity that merits additional investigation. According to Mazarbhuiya (2019), agglomerative hierarchical clustering is an ideal method to employ for identifying anomalies in the collective attributes of network traffic data which serves as an effective intrusion detection mechanism.
+
+## Hypotheses
+
+  This study will assume the status quo of a network without a functioning NIDS and no PCAP data available.  Namely, the null hypothesis will be that this analysis will not produce any usable information due to the lack of a dedicated monitoring system or full packet capture and storage.  Hence, the alternative hypothesis will be that a clustering analysis of Zeek logs can serve a similar function as a NIDS by indicating outliers that merit additional scrutiny from a cybersecurity analyst.
+
+  $H_0$: A hierarchical clustering analysis of Zeek logs cannot reveal anomalous network behavior.
+
+  $H_A$: A hierarchical clustering analysis of Zeek logs can reveal anomalous network behavior.
+
+
 ***
 # Part II: Data Collection
 ***
- 
 
-B.  Report on your data-collection process by describing the relevant data you collected, discussing one advantage and one disadvantage of the data-gathering methodology you used, and discussing how you overcame any challenges you encountered during the process of collecting your data.
+## Collection Process
 
- 
-\newpage
+  The data needed to address the above defined research question should be Zeek log data collected from a network with a non-trivial number of active users, multiple public-facing hosted services, and—ideally—was compromised during the log collection period.  These attributes ensure that the sample data incorporates multiple types of network traffic and will allow a complete assessment of whether the above defined null hypothesis is accepted or rejected (Zhang, 2010).
+
+  The U.S. Army Cyber Command’s (ARCYBER) Information Integration Division (ID2) maintains Zeek logs for a subset of Department of Defense Information Network (DODIN) systems. Some of this data has been approved for release to defense industry and academic partners for research and development purposes (Brust, 2021).  With that purpose in mind, the ARCYBER Cyber Protection Brigade (CPB) identifies candidate sample data sets while conducting their primary mission of identifying and mitigating real-world network intrusions on real-world networks.  
+  
+## Advantages and Disadvantages
+
+  This data collection process has the inherent advantage of ensuring the requisite data complexity for this project---including the presence of malicious traffic resulting from that network’s compromise.  Alternatively, one disadvantage of using this technique for data collection is that every aspect of the collection process occurs under the control of a party not directly or indirectly involved with this study.  This means that any desired adjustments to the quantity of data (e.g. date and time ranges available to query) are impossible.  This also means that feature selection for this project will be driven by the Zeek configuration at the site of network compromise as opposed to a custom Zeek configuration optimized for anomaly detection.
+
+
 ***
 # Part III: Data Extraction and Preparation
 ***
- 
 
-C.  Describe your data-extraction and -preparation process and provide screenshots to illustrate each step. Explain the tools and techniques you used for data extraction and data preparation, including how these tools and techniques were used on the data. Justify why you used these particular tools and techniques, including one advantage and one disadvantage when they are used with your data-extraction and -preparation methods. 
+## Data Extraction from Gabriel Nimbus
 
+  Access to this data set was secured via a formal request through ID2, coordinating with Gabriel Nimbus (GN) administrators to extract the data from its Hadoop cluster, and arranging the transfer of the extracted data to a DODIN-external server for analysis.  
+
+  Data was queried via the GN portal using a temporary purpose-built account with minimal permissions to prevent access to any sensitive or protected data.  As such, the query “*” was run across the widest date range authorized in order to ensure that all available data was collected.  This data was extracted from the GN Hadoop cluster as a comma separated values (.csv) file and transferred to a private server so that it could be accessed from a non-DODIN system.
+  
+![Screenshot of Gabriel Nimbus User Interface](./GN.png)
+
+## Data Preparation
+
+  While it is true that multiple tools are capable of performing agglomerative hierarchical clustering, R will be employed for this task due to its greater diversity of package that are more specifically targeted to narrow applications as compared to Python or SAS (Keells, 2021). Due to being created by statisticians for statistical and data science purposes, R also performs many integral tasks natively and---hence---more simply and quickly than alternative tools (Wickham & Grolemund, 2017).
+
+  The extracted comma separated values file will be loaded into the environment for preparation and subsequent analysis.
+
+```{r Import and Examine Data, message=FALSE, warning=FALSE}
+df <- read_csv('./zeek.csv', col_names = TRUE)
+dim(df)
+```
+  
+  The variables included in the raw data conform to GN unified data model standards and are far larger in number than this project requires. The publicly releasable data set consists of 23,747 observations across 98 features.  This dataset can be subdivided to seven types (or classes) of logs: conn, dns, files, http, ssh, ssl, and weird (The Zeek Project, 2021).  For each class of Zeek log, only a subset of the 98 features are applicable values.  For this reason, whenever a particular log class is examined, the extraneous features should not be considered in order to avoid inserting artificial data sparsity (Shi et al., 2021).
+
+  
+```{r}
+conn.columns <- c("ID", "Visibility", "timestamp", "bdp.ingest.file.name",
+                  "bdp.ingest.parser.name", "connection.local_orig",
+                  "connection.local_resp", "destination.as.nunber",
+                  "destination.bytes", "destination.geo.ccmd",
+                  "destination.geo.country_name", "destination.geo.location.lat",
+                  "destination.geo.location.lon", "destination.ip",
+                  "destination.ip_bytes", "destination.packets", "destination.port",
+                  "event.category", "event.duration", "event.id", "event.ingested",
+                  "network.connection.history", "network.connection.state",
+                  "network.direction", "network.missed_bytes", "network.protocol",
+                  "network.transport", "schema.mapping_version", "schema.version",
+                  "source.bytes", "source.ip", "source.ip_bytes", "source.packets",
+                  "source.port")
+```
+
+
+```{r Subset Connectivity Logs}
+df.conn <- df %>% 
+            filter(bdp.ingest.file.name == "conn.log") %>%
+            select(all_of(conn.columns))
+```
+  
+  The quality of the data is very high as the Zeek logs selected for study are military grade. Overall sparsity within the selected log class (conn) is 12.4%.  
+
+```{r Conn Sparsity, echo=FALSE, message=FALSE, warning=FALSE}
+library(visdat)
+vis_dat(df.conn, warn_large_data = FALSE)
+```
+This agglomerative clustering project will focus on a select few features from the conn logs; specifically, this project will examine all 10,726 observations available in the conn logs across 4 specific features: destination.packets, destination.port, source.packets, and source.port.
+
+```{r Subset Selected Features}
+df.conn.cut <- df.conn %>% 
+  select(destination.packets, destination.port, source.packets, source.port)
+```
+  Data sparsity within the four selected features for analysis (destination.packets, destination.port, source.packets, and source.port) is 0%. Having a very low sparsity for the data is important as outlier detection could be skewed by missing values (Shi et al., 2021).
+
+  After reducing the original dataset down to the four chosen variables, a scaled version of the data will be created due to the differences in the ranges of the variables (Pamula et al., 2010). 
+
+```{r Conn Scaling}
+df.conn.scaled <- as.data.frame(scale(df.conn.cut))
+```
+  Outliers are frequently removed for clustering analyses; however, they will not be removed for this project because the desired outcome in this case relies on there being correlations among the outliers that might identify threat actors’ actions within the monitored network (Mazarbhuiya, 2019).
  
 \newpage
 ***
 # Part IV: Analysis
 ***
  
+    D.  Report on your data-analysis process by describing the analysis technique(s) you used to appropriately analyze the data. Include the calculations you performed and their outputs. Justify how you selected the analysis technique(s) you used, including one advantage and one disadvantage of these technique(s).
 
-D.  Report on your data-analysis process by describing the analysis technique(s) you used to appropriately analyze the data. Include the calculations you performed and their outputs. Justify how you selected the analysis technique(s) you used, including one advantage and one disadvantage of these technique(s).
+    The report on the data-analysis process includes a description of the technique(s) used. The report includes the calculations performed and their outputs as well as a justification of why the analysis technique(s) were selected and one advantage and one disadvantage of these technique(s). The technique(s) used and the analysis are appropriate for the data.
 
+
+  Having prepared the data for analysis, a distance (or dissimilarity) matrix will be calculated in order to compare linkage methods. 
+
+
+```{r Dissimilarity Matrix Calculation}
+df.conn.dist <- dist(df.conn.scaled, method = "euclidean")
+```
+
+```{r Compute Agglomerative Coefficient, cache = TRUE}
+library(cluster)
+hc.average <- agnes(df.conn.dist, method =  "average")
+hc.single <- agnes(df.conn.dist, method = "single")
+hc.complete <- agnes(df.conn.dist, method = "complete")
+hc.ward <- agnes(df.conn.dist, method = "ward")
+```
+
+| Average          | Single           | Complete          | Ward’s         |
+|------------------|------------------|-------------------|----------------|
+|`r hc.average$ac`|`r  hc.single$ac` |`r  hc.complete$ac`| `r  hc.ward$ac`|
+
+After selecting the optimum linkage method, the cluster will be cut to various heights informed by an elbow plot, gap statistic plot, and the cluster membership patterns themselves. 
+
+```{r Dendrogram, cache = TRUE }
+pltree(hc.complete, cex = 0.6, hang = -1, main = "Dendrogram")
+```
+
+```{r Determine Number of Clusters, cache = TRUE, fig.height=3}
+library(factoextra)
+# Plot cluster results
+p1 <- fviz_nbclust(df.conn.scaled, FUN = hcut, method = "wss", 
+                   k.max = 10) +
+  ggtitle("(A) Elbow method")
+p2 <- fviz_nbclust(df.conn.scaled, FUN = hcut, method = "silhouette", 
+                   k.max = 10) +
+  ggtitle("(B) Silhouette method")
+
+# Display plots side by side
+gridExtra::grid.arrange(p1, p2, nrow = 1)
+```
+
+## Four-Cluster Membership Plot
+
+  Below is a cluster plot showing the relative differences and similarities of grouped network traffic.  Given network data, this visualization is most effective at determining optimal number of clusters and imparting a sense of the relative disimilarity of the detected outliers.
+  
+```{r Two-Cluster Membership, echo=FALSE, cache=TRUE}
+clust.2 <- cutree(hc.average, k = 2)
+fviz_cluster(list(data = df.conn.scaled, cluster = clust.2))
+```
+
+```{r Four-Cluster Membership, echo=FALSE, cache=TRUE}
+clust.4 <- cutree(hc.average, k = 4)
+fviz_cluster(list(data = df.conn.scaled, cluster = clust.4))
+```
+
+
+The silhouette values will be produced to assess the objective quality of the clusters and the resulting outliers will be forwarded to the cybersecurity analysts for further review. 
+
+
+Project Outcomes: The project will seek to separate Zeek log data into clusters that will group legitimate traffic types together and isolate anomalous traffic that might indicate a compromise of the network. Support for the alternative hypothesis is found in Mazarbhuiya et. Al (2019), which indicated that this agglomerative hierarchical clustering is an effective way to flag potential network compromise indicators.
+
+```{r Silhouette Score}
+hc.final <- hcut(df.conn.scaled, k = 4, hc_method = "average")
+fviz_silhouette(hc.final)
+```
+
+
+```{r Cut Tree and Count Groups, cache = TRUE }
+groups <- cutree(hc.complete, k=4)
+table(groups)
+```
+
+## Class Imbalance
+  
+  Like money laundering, network traffic that is indicative of compromise is vastly outnumbered by legitimate traffic.
  
+
 \newpage
 ***
 # Part V: Data Summary and Implications
 ***
- 
 
-E.  Summarize the implications of your data analysis by discussing the results of your data analysis in the context of the research question, including one limitation of your analysis. Within the context of your research question, recommend a course of action based on your results. Then propose two directions or approaches for future study of the data set.
+## Analysis Results
 
- 
-\newpage
-***
-# Part VI: Submission Standards
-***
+  The goal of this project was to separate the Zeek log data into multiple 	clusters that group legitimate network traffic types together and isolate anomalous traffic that might indicate a compromise of the network.  The agglomerative coefficients produced by multiple linkage methods were greater than 0.9 and the average silhouette width for our final clustering model was also greater than 0.9.  The smallest cluster contained three observations (0.02% of total observations) and a silhouette width of greater than 0.99.  These results lead necessitate a rejection of the null hypothesis that an agglomerative hierarchical clustering analysis cannot reveal anomalous network behavior.  Similarly, this study’s results necessitate an affirmative response to the research question of whether an agglomerative hierarchical clustering analysis of network Zeek logs can function as an effective anomaly detection technique. 
 
-F.  Acknowledge sources, using in-text citations and references, for content that is quoted.
+## Analysis Limitation
 
- 
+  Anomaly detection---while a valuable part of the threat identification process---is not equivalent to threat identification on its own.
 
-G.  Demonstrate professional communication in the content and presentation of your submission.
+## Course of Action Recommendation
 
-@Andrews2019Zeek
-@Ghafir2014APT
-@Haas2019Graphs
-@Niu2017APTDNS
-@Soliman2021APT
-@Soliman2020GNN
-@Wu2019ACS
-@Zhao2015DNS
+  In circumstances where it is not possible or practical to leverage the real-time scanning of a NIDS, 
+
+## Approaches for Further Study
+
+  The results of this study indicate a successful proof-of-concept for security analysis methods where real-time network monitoring is not possible.  However, 
+
+### Additional Feature Combinations
+
+  Despite experimenting with various combinations of variables while conducting this study, the set of tested feature combinations is far from exhaustive.  This study does not claim certainty that an alternative feature selection would not produce more significant clusters.  Additional research should be conducted with varying features from the connectivity logs and even from other log classes.  Particular attention should be focused on increasing the separation of the outliers from legitimate network traffic while keeping the benign 
+
+### Threat Detection from Amalgamated Outliers
 
 
-
+  
 
 \newpage
-***
 # References
-***
 \  
+
+Brust, A. (2021). Army hopes Big Data Platform enables deeper analysis across bigger datasets. Federal News Network. Retrieved July 12, 2022, from https://federalnewsnetwork.com/technology-main/2021/08/army-hopes-big-data-platform-enables-deeper-analysis-across-bigger-datasets/ 
+
+Keells, J. (2021, July 9). Python vs R for data science. Medium. Retrieved July 12, 2022, from https://medium.com/octave-john-keells-group/python-vs-r-for-data-science-320e167ffe90 
+
+Newton, H., & Schoen, S. (2022). Newton’s Telecom Dictionary (32nd ed.). Telecom Publishing.
+
+Mazarbhuiya, F.A., AlZahrani, M.Y., Georgieva, L. (2019). Anomaly Detection Using Agglomerative Hierarchical Clustering Algorithm. In: Kim, K., Baek, N. (eds) Information Science and Applications 2018. ICISA 2018. Lecture Notes in Electrical Engineering, vol 514. Springer, Singapore. https://doi.org/10.1007/978-981-13-1056-0_48 
+
+Pamula, R., Deka J. K., Nandi, S. (2011). An Outlier Detection Method Based on Clustering, Second International Conference on Emerging Applications of Information Technology, 2011, pp. 253-256, doi: 10.1109/EAIT.2011.25. 
+
+Shi, P., Zhao, Z., Zhong, H., Shen, H., & Ding, L. (2021). An improved agglomerative hierarchical clustering anomaly detection method for scientific data. Concurrency and Computation: Practice and Experience, 33. 
+
+The Zeek Project. (2020). The Zeek Network Security Monitor. https://zeek.org/   
+
+The Zeek Project. (2021). conn.log — Book of Zeek (git/master). Zeek Logs Official Documentation. Retrieved July 12, 2022, from https://docs.zeek.org/en/master/logs/conn.html  
+
+Wickham, H., & Grolemund, G. (2017). R for Data Science. Sebastopol, CA: O’Reilly. https://r4ds.had.co.nz/ 
+
+Zhang, Y., Liu, J., Li, H. (2010). An Outlier Detection Algorithm Based on Clustering Analysis. First International Conference on Pervasive Computing, Signal Processing and Applications, 2010, pp. 1126-1128, doi: 10.1109/PCSPA.2010.277.
+ 
