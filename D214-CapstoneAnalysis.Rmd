@@ -1,6 +1,6 @@
 ---
 always_allow_html: true
-title: "D214 - Graduate Capstone"
+title: "Agglomerative Hierarchical Clustering as an Unsupervised Anomaly Detection Technique"
 author: "Sean P. Murphy"
 date: "`r format(Sys.time(), '%d %B %Y')`"
 output:
@@ -11,20 +11,12 @@ output:
   html_notebook:
     toc: true
     toc_depth: 3
-subtitle: Data Analytics Report
+subtitle: Network Intrusion Detection via Zeek Log Analysis
 bibliography: D214-BibTeX.bib
-csl: apa-manual.csl
+#csl: apa-manual.csl
 ---
 
-
-\newpage
-***
-# Introduction
-***
-
-## Initial Preparation
-
-```{r Useful Libraries}
+```{r Useful Libraries, include=FALSE}
 # Data Manipulation
 library(tidyverse)
 
@@ -36,6 +28,7 @@ library(sysfonts)
 library(showtextdb)
 library(showtext)
 font_add("LM Roman 10", "./lmroman10-regular.otf")
+showtext_auto()
 ```
 
 \newpage
@@ -55,13 +48,13 @@ font_add("LM Roman 10", "./lmroman10-regular.otf")
 
 ## Justification
 
-  It is sometimes necessary to assess the security status of a network that does not have a NIDS installed or after a period during which an installed NIDS was inactive.  In this case, without a system monitoring traffic in real time, a packet capture (PCAP) or alternative network logging system can be leveraged.  While PCAP data is the gold standard for network forensics, the effort and expense required to collect and store every packet of network traffic in its entirety limits this kind of application to very narrow and temporary use cases (Sikos, 2020).  The ability to use a more common and accessible logging standard such as Zeek as an input dataset for an anomaly detection algorithm would be an option that carries a significant business value with respect to information assurance, audit compliance, and risk management assessments.
+  It is sometimes necessary to assess the security status of a network that does not have a NIDS installed or after a period of time during which an installed NIDS was inactive.  In this case, without a system monitoring traffic in real time, a packet capture (PCAP) or alternative network logging system can be leveraged.  While PCAP data is the gold standard for network forensics, the effort and expense required to collect and store every packet of network traffic in its entirety limits this kind of application to very narrow and temporary use cases (Sikos, 2020).  The ability to use a more common and accessible logging standard such as Zeek as an input dataset for an anomaly detection algorithm would be an option that carries significant business value with respect to information assurance, audit compliance, and risk management assessments.
 
   The contribution of this study to the field of Data Analytics and the MSDA program is to create a clustering model which can identify anomalous network activity from Zeek log data for further investigation by cybersecurity analysts so that potential threats are flagged for remediation before causing significant damage to compromised information systems (The Zeek Project, 2020). This study will use agglomerative hierarchical clustering, an unsupervised machine learning method for data mining, to leverage multiple features of stored Zeek logs in order to create groupings of data points based on their relative similarity in order to isolate any anomalous network activity that merits additional investigation. According to Mazarbhuiya (2019), agglomerative hierarchical clustering is an ideal method to employ for identifying anomalies in the collective attributes of network traffic data which serves as an effective intrusion detection mechanism.
 
 ## Hypotheses
 
-  This study will assume the status quo of a network without a functioning NIDS and no PCAP data available.  Namely, the null hypothesis will be that this analysis will not produce any usable information due to the lack of a dedicated monitoring system or full packet capture and storage.  Hence, the alternative hypothesis will be that a clustering analysis of Zeek logs can serve a similar function as a NIDS by indicating outliers that merit additional scrutiny from a cybersecurity analyst.
+  This study will assume the status quo of a network without a functioning NIDS and no PCAP data available.  Namely, the null hypothesis will be that this analysis will not produce any usable information due to the lack of a dedicated monitoring system or full packet capture and storage.  Hence, the alternative hypothesis will be that a clustering analysis of Zeek logs can serve a similar function as a NIDS employing anomaly detection by indicating outliers that merit additional scrutiny from a cybersecurity analyst.
 
   $H_0$: A hierarchical clustering analysis of Zeek logs cannot reveal anomalous network behavior.
 
@@ -102,14 +95,14 @@ font_add("LM Roman 10", "./lmroman10-regular.otf")
   The extracted comma separated values file will be loaded into the environment for preparation and subsequent analysis.
 
 ```{r Import and Examine Data, message=FALSE, warning=FALSE}
-df <- read_csv('./zeek.csv', col_names = TRUE)
+df <- read_csv('./zeek.csv', col_names = TRUE, show_col_types = FALSE)
 dim(df)
 ```
   
   The variables included in the raw data conform to GN unified data model standards and are far larger in number than this project requires. The publicly releasable data set consists of 23,747 observations across 98 features.  This dataset can be subdivided to seven types (or classes) of logs: conn, dns, files, http, ssh, ssl, and weird (The Zeek Project, 2021).  For each class of Zeek log, only a subset of the 98 features are applicable values.  For this reason, whenever a particular log class is examined, the extraneous features should not be considered in order to avoid inserting artificial data sparsity (Shi et al., 2021).
 
   
-```{r}
+```{r Define Connectivity Columns, include=FALSE}
 conn.columns <- c("ID", "Visibility", "timestamp", "bdp.ingest.file.name",
                   "bdp.ingest.parser.name", "connection.local_orig",
                   "connection.local_resp", "destination.as.nunber",
@@ -132,18 +125,22 @@ df.conn <- df %>%
             select(all_of(conn.columns))
 ```
   
-  The quality of the data is very high as the Zeek logs selected for study are military grade. Overall sparsity within the selected log class (conn) is 12.4%.  
+  The quality of the data is very high as the Zeek logs selected for study are intended to be used for forensic analysis applications by cybersecurity professionals. Overall sparsity within the selected log class (conn) is 12.4%.
 
-```{r Conn Sparsity, echo=FALSE, message=FALSE, warning=FALSE}
+```{r Connectivity Sparsity, cache=TRUE, echo=FALSE, message=FALSE, warning=FALSE, fig.showtext=TRUE}
 library(visdat)
-vis_dat(df.conn, warn_large_data = FALSE)
+vis_dat(df.conn, warn_large_data = FALSE) +
+                      labs(title = "Connectivity Logs Sparsity", caption ="Figure 2") +
+                      theme(text = element_text(family = "LM Roman 10"))
 ```
-This agglomerative clustering project will focus on a select few features from the conn logs; specifically, this project will examine all 10,726 observations available in the conn logs across 4 specific features: destination.packets, destination.port, source.packets, and source.port.
+  
+  This agglomerative clustering project will focus on a select few features from the conn logs; specifically, this project will examine all 10,726 observations available in the conn logs across 4 specific features: destination.packets, destination.port, source.packets, and source.port.
 
 ```{r Subset Selected Features}
 df.conn.cut <- df.conn %>% 
   select(destination.packets, destination.port, source.packets, source.port)
 ```
+  
   Data sparsity within the four selected features for analysis (destination.packets, destination.port, source.packets, and source.port) is 0%. Having a very low sparsity for the data is important as outlier detection could be skewed by missing values (Shi et al., 2021).
 
   After reducing the original dataset down to the four chosen variables, a scaled version of the data will be created due to the differences in the ranges of the variables (Pamula et al., 2010). 
@@ -151,96 +148,132 @@ df.conn.cut <- df.conn %>%
 ```{r Conn Scaling}
 df.conn.scaled <- as.data.frame(scale(df.conn.cut))
 ```
-  Outliers are frequently removed for clustering analyses; however, they will not be removed for this project because the desired outcome in this case relies on there being correlations among the outliers that might identify threat actors’ actions within the monitored network (Mazarbhuiya, 2019).
- 
+
+  Outliers are frequently removed for traditional clustering analyses; however, they will not be removed for this project because the desired outcome in this case relies on the existence of correlations among the outliers that might identify threat actors’ actions within the monitored network (Mazarbhuiya, 2019).  As such, no further action will be taken to clean or prepare the data for analysis.
+
+
 \newpage
 ***
 # Part IV: Analysis
 ***
- 
-    D.  Report on your data-analysis process by describing the analysis technique(s) you used to appropriately analyze the data. Include the calculations you performed and their outputs. Justify how you selected the analysis technique(s) you used, including one advantage and one disadvantage of these technique(s).
 
-    The report on the data-analysis process includes a description of the technique(s) used. The report includes the calculations performed and their outputs as well as a justification of why the analysis technique(s) were selected and one advantage and one disadvantage of these technique(s). The technique(s) used and the analysis are appropriate for the data.
+## Distance Matrix
 
-
-  Having prepared the data for analysis, a distance (or dissimilarity) matrix will be calculated in order to compare linkage methods. 
-
+  Having prepared the data for analysis, a distance (or dissimilarity) matrix will be calculated in order to compare four common linkage methods.  The data was scaled to have a mean of 0 and a standard deviation of 1 during pre-processing, so we will use a Euclidean distance calculation. 
 
 ```{r Dissimilarity Matrix Calculation}
 df.conn.dist <- dist(df.conn.scaled, method = "euclidean")
 ```
 
+## Agglomerative Coeffecients
+
+  The agglomerative coefficient (AC) of four common linkage methods---complete, average, single, and ward's method---will be calculated and compared in order to determine which will be used for this project's analysis. The agglomerative coefficient conveys a sense of how defined the clustering structure is within a given data set.  AC values closer to 1 suggest a more clearly defined structure, and less clearly defined structres exhibit lower AC values.
+  
 ```{r Compute Agglomerative Coefficient, cache = TRUE}
 library(cluster)
-hc.average <- agnes(df.conn.dist, method =  "average")
-hc.single <- agnes(df.conn.dist, method = "single")
+set.seed(214)
+
 hc.complete <- agnes(df.conn.dist, method = "complete")
-hc.ward <- agnes(df.conn.dist, method = "ward")
+hc.average  <- agnes(df.conn.dist, method = "average")
+hc.single   <- agnes(df.conn.dist, method = "single")
+hc.ward     <- agnes(df.conn.dist, method = "ward")
 ```
 
 | Average          | Single           | Complete          | Ward’s         |
 |------------------|------------------|-------------------|----------------|
-|`r hc.average$ac`|`r  hc.single$ac` |`r  hc.complete$ac`| `r  hc.ward$ac`|
+|`r hc.average$ac` |`r  hc.single$ac` |`r  hc.complete$ac`| `r  hc.ward$ac`|
 
-After selecting the optimum linkage method, the cluster will be cut to various heights informed by an elbow plot, gap statistic plot, and the cluster membership patterns themselves. 
+  We can see above that each of the calculated linkage methods produce values within .0001 of 1.  This indicates a statistically significant clustering structure within the data regardless of the linkage method chosen. Ward's method will be employed for the remainder of this project due to being closer to 1 than its alternatives.
 
-```{r Dendrogram, cache = TRUE }
-pltree(hc.complete, cex = 0.6, hang = -1, main = "Dendrogram")
-```
+## Number of Clusters
 
-```{r Determine Number of Clusters, cache = TRUE, fig.height=3}
+  Traditionally, clustering analyses include a discussion of the dendrogram to show the clustering process.  This visualization can help to discern the optimal number of clusters and increase confidence in the chosen linkage method where the dendrogram does not show anomalous behavior itself (e.g. dendrogram inversion).
+
+
+```{r Determine Number of Clusters, echo=FALSE, fig.height=3, cache=TRUE, fig.showtext=TRUE}
 library(factoextra)
-# Plot cluster results
-p1 <- fviz_nbclust(df.conn.scaled, FUN = hcut, method = "wss", 
-                   k.max = 10) +
-  ggtitle("(A) Elbow method")
-p2 <- fviz_nbclust(df.conn.scaled, FUN = hcut, method = "silhouette", 
-                   k.max = 10) +
-  ggtitle("(B) Silhouette method")
 
-# Display plots side by side
-gridExtra::grid.arrange(p1, p2, nrow = 1)
+elbow      <- fviz_nbclust(df.conn.scaled, FUN = hcut, 
+                      method = "wss", k.max = 10) +
+                      labs(title = "Elbow Method", caption = "Figure 3") +
+                      theme_light() +
+                      theme(text = element_text(family = "LM Roman 10"))
+
+silhouette <- fviz_nbclust(df.conn.scaled, FUN = hcut, 
+                      method = "silhouette", k.max = 10) +
+                      labs(title = "Silhouette Method", caption = "Figure 4") +
+                      theme_light() +
+                      theme(text = element_text(family = "LM Roman 10"))
+
+gridExtra::grid.arrange(elbow, silhouette, nrow = 1)
 ```
 
-## Four-Cluster Membership Plot
+  The elbow plot is largely inconclusive; there is no significant bend that might indicate an optimal cluster count.  The silhouette statistic plot, however, is conclusivel it indicates that a two-cluster solution is optimal for this data set. 
+  
+  The project will proceed with two clusters. The choice---in this case---is supported by examining the silhouette statistic, which would be consistent with the approach for any normal hierarchical clustering analysis.  However, even if this approach were not conclusive, a two-cluster approach would still be the proper way forward for the intended application of this analysis.  Network traffic is either normal or abnormal.  While there may be several classes of normal (or abnormal) traffic, the desired outcome for the scope of this study that traffic that is the least similar to the majority of baseline traffic is flagged for human analysis.
+
+## Cluster Membership
 
   Below is a cluster plot showing the relative differences and similarities of grouped network traffic.  Given network data, this visualization is most effective at determining optimal number of clusters and imparting a sense of the relative disimilarity of the detected outliers.
   
-```{r Two-Cluster Membership, echo=FALSE, cache=TRUE}
-clust.2 <- cutree(hc.average, k = 2)
-fviz_cluster(list(data = df.conn.scaled, cluster = clust.2))
+```{r Two-Cluster Membership, echo=FALSE, cache=TRUE, fig.showtext=TRUE, fig.height=3}
+clust.2 <- cutree(hc.ward, k = 2)
+
+fviz_cluster(list(data = df.conn.scaled, cluster = clust.2), geom = "point",
+             font.family = "LM Roman 10") +
+  labs(title = "Two-Cluster Observation Membership Plot", 
+  y=NULL, x=NULL, caption = "Figure 5") +
+  annotate("text", x = -4, y = -35, label = "Anomalous Network Traffic") +
+  annotate("text", x = -7.5, y = -4.5, label = "Normal Network Traffic") +
+  theme_light() +
+  theme(text = element_text(family = "LM Roman 10"))
 ```
 
-```{r Four-Cluster Membership, echo=FALSE, cache=TRUE}
-clust.4 <- cutree(hc.average, k = 4)
-fviz_cluster(list(data = df.conn.scaled, cluster = clust.4))
+## Silhouette Values
+
+  The silhouette values will be produced to assess the objective quality of the clusters and the resulting outliers will be forwarded to the cybersecurity analysts for further review. 
+
+```{r Define Cut, cache=TRUE, include=FALSE}
+library(factoextra)
+hc.cut <- hcut(df.conn.scaled, k = 2, hc_method = "ward.D2")
 ```
 
-
-The silhouette values will be produced to assess the objective quality of the clusters and the resulting outliers will be forwarded to the cybersecurity analysts for further review. 
-
-
-Project Outcomes: The project will seek to separate Zeek log data into clusters that will group legitimate traffic types together and isolate anomalous traffic that might indicate a compromise of the network. Support for the alternative hypothesis is found in Mazarbhuiya et. Al (2019), which indicated that this agglomerative hierarchical clustering is an effective way to flag potential network compromise indicators.
-
-```{r Silhouette Score}
-hc.final <- hcut(df.conn.scaled, k = 4, hc_method = "average")
-fviz_silhouette(hc.final)
+```{r Silhouette Score, echo=FALSE, fig.height=3, fig.showtext=TRUE, cache=TRUE}
+fviz_silhouette(hc.cut, k=2, label = FALSE, print.summary = FALSE) +
+  labs(title = "Cluster Silhouette Plot", y=NULL, x=NULL,
+  subtitle = "Average Silhouette Width: 0.98",
+  caption = "Figure 6") +
+  theme_light() +
+  theme(text = element_text(family = "LM Roman 10"))
 ```
 
 
 ```{r Cut Tree and Count Groups, cache = TRUE }
-groups <- cutree(hc.complete, k=4)
-table(groups)
+table(clust.2)
 ```
 
-## Class Imbalance
-  
-  Like money laundering, network traffic that is indicative of compromise is vastly outnumbered by legitimate traffic.
- 
+## Advantage and Disadvantage
 
-\newpage
+### Advantage: Network Defined Normal
+
+  Due to how an agglomerative hierarchical clustering algorithm functions, each application of this method will use the traffic patterns of the analyzed network to establish appropriate thresholds for outlier definitions.  This means that the approach could be applied with very similar workflows across various industries and network topographies.  Much like the appeal of anomaly detection vice signature matching, this unsupervised data mining approach to forensic network analysis generalizes very well. 
+  
+### Disadvantage: Class Imbalance
+
+  Like money laundering, network traffic that is indicative of compromise is vastly outnumbered by legitimate traffic.
+
+
+```{r Plot Dendrogram, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, fig.height=3}
+library(factoextra)
+fviz_dend(hc.cut, cex = 0.5, k = 2, color_labels_by_k = TRUE, show_labels = FALSE) +
+  labs(title = "Complete Dendrogram", y=NULL, x=NULL, caption = "Figure 7") +
+  theme_light() +
+  theme(text = element_text(family = "LM Roman 10"))
+```
+ 
+ 
 ***
-# Part V: Data Summary and Implications
+# Part V: Summary and Implications
 ***
 
 ## Analysis Results
@@ -249,21 +282,28 @@ table(groups)
 
 ## Analysis Limitation
 
-  Anomaly detection---while a valuable part of the threat identification process---is not equivalent to threat identification on its own.
+  Anomaly detection---while a valuable part of the threat identification process---is not equivalent to threat identification on its own.  It is true that legitimate network traffic can be anomalous.  For example, an authorized systems administrator installs an approved new program that establishes verification and activation telemetry with a licensing server. That kind of traffic will likely use atypical ports and contain unusual packet bursts that would be flagged (correctly) as anomalous; however, it would not be an indicator of compromise.
+
+  Within the defined scope of this project, the anomalies are not necessarily assessed for maliciousness.  For this reason, the structure of the analysis calls for the forwarding of flagged traffic to cybersecurity specialists for further analysis. 
 
 ## Course of Action Recommendation
 
-  In circumstances where it is not possible or practical to leverage the real-time scanning of a NIDS, 
+  In a circumstance where it is not possible or otherwise impractical to leverage the real-time scanning of a NIDS, a network administrator may still want to assess the security state of a network with available log data. Rather than be required to sift through the entirety of large amounts of traffic or apply domain knowledge to a very large dataset, it may be desired to narrow the scope of data that a human specialist should examine such that the bulk of benign traffic does not have to be considered. 
+
+  For this scenario, it is recommended that an agglomerative hierarchical clustering technique be applied to the overall count and port information from both the source and destination of packets from the network’s connectivity Zeek logs.  This study found that using Ward’s method criterion was the ideal linkage method.  A silhouette statistic graph can be used to determine the theoretically optimal number of clusters; however, a two-cluster solution will best separate the typical network traffic from the traffic that least conforms to the norms of the tested environment.  Upon completion of the agglomerative clustering analysis, the traffic flagged as outliers should be forwarded to the relevant cybersecurity specialists for manual review.
 
 ## Approaches for Further Study
 
-  The results of this study indicate a successful proof-of-concept for security analysis methods where real-time network monitoring is not possible.  However, 
+  The results of this study indicate a successful proof-of-concept for a specific machine learning enabled security analysis method where real-time network monitoring is not possible.  However, the method demonstrated here can likely be improved or otherwise optimized for simpler or more reliable implementation.
 
-### Additional Feature Combinations
+### Feature Combinations
 
-  Despite experimenting with various combinations of variables while conducting this study, the set of tested feature combinations is far from exhaustive.  This study does not claim certainty that an alternative feature selection would not produce more significant clusters.  Additional research should be conducted with varying features from the connectivity logs and even from other log classes.  Particular attention should be focused on increasing the separation of the outliers from legitimate network traffic while keeping the benign 
+  Despite experimenting with a multitude of variable combinations while conducting this study, the set of tested feature combinations is far from exhaustive.  This scope of the findings of this project do not claim certainty that an alternative feature selection would not produce more significant or more directly useful clusters.  Additional research should be conducted with varying features from the connectivity logs or from other Zeek log classes.  Particular attention should be focused on increasing the separation of the outliers from legitimate network traffic while keeping the authorized traffic from being flagged as a false positive. 
 
-### Threat Detection from Amalgamated Outliers
+### Threat Ranking
+
+  This approach requires a cybersecurity analyst to examine each of the outliers identified as potential evidence of the presence of a threat actor within their network.  A further avenue of study could be to run a similar agglomerative hierarchical clustering algorithm on a larger number of other data sets, group all the identified outliers, label the data as benign or malicious, and then attempt to train a secondary algorithm to prioritize the flagged outliers according to their relative likelihood of being an actual indicator of network compromise.
+
 
 
   
@@ -286,9 +326,11 @@ Shi, P., Zhao, Z., Zhong, H., Shen, H., & Ding, L. (2021). An improved agglomera
 
 The Zeek Project. (2020). The Zeek Network Security Monitor. https://zeek.org/   
 
-The Zeek Project. (2021). conn.log — Book of Zeek (git/master). Zeek Logs Official Documentation. Retrieved July 12, 2022, from https://docs.zeek.org/en/master/logs/conn.html  
+The Zeek Project. (2021). conn.log — Book of Zeek (git/master). Zeek Logs Official Documentation. Retrieved July 12, 2022, from https://docs.zeek.org/en/master/logs/conn.html
 
 Wickham, H., & Grolemund, G. (2017). R for Data Science. Sebastopol, CA: O’Reilly. https://r4ds.had.co.nz/ 
 
 Zhang, Y., Liu, J., Li, H. (2010). An Outlier Detection Algorithm Based on Clustering Analysis. First International Conference on Pervasive Computing, Signal Processing and Applications, 2010, pp. 1126-1128, doi: 10.1109/PCSPA.2010.277.
+
+Zhang, Y., Liu, J., Zheng, L., & Yan, C. (2019) A Hierarchical Clustering Strategy of Processing Class Imbalance and Its Application in Fraud Detection. IEEE 21st International Conference on High Performance Computing and Communications. IEEE 17th International Conference on Smart City; IEEE 5th International Conference on Data Science and Systems (HPCC/SmartCity/DSS). https://doi.org/10.1109/HPCC/SmartCity/DSS.2019.00249
  
