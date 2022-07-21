@@ -7,45 +7,252 @@ format:
   revealjs: 
     theme: dark
 editor: visual
+bibliography: D214-BibTeX.bib
+csl: apa-manual.csl
 ---
 
-## Assignment
 
-Present your Capstone project to a non-technical audience. Use Panopto to record yourself delivering a presentation that includes slides displayed by a multimedia tool (e.g., PowerPoint, Keynote, Prezi). Your recording should capture your multimedia presentation. Your presentation should also demonstrate appropriate communication skills for the audience.
+```{r Useful Libraries, include=FALSE}
+# Data Manipulation
+library(tidyverse)
 
-## Requirements
+# Visualizations
+library(factoextra)
+library(cluster)
+library(ggplot2)
+library(gridExtra)
+library(kableExtra)
 
--   a brief introduction of yourself and your background
-
--   a statement of the problem and the hypothesis 
-
--   a summary of the data-analysis process    
-
--   an outline of the findings 
-
--   an explanation of the limitations of the techniques and tools used 
-
--   a summary of proposed actions 
-
--   expected benefits of the study (be as specific and quantitative as possible)
-
-
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
-
-## Bullets
-
-When you click the **Render** button a document will be generated that includes:
-
--   Content authored with markdown
--   Output from executable code
-
-## Code
-
-When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
-
-```{r}
-1 + 1
+# Visualization Font
+library(sysfonts)
+library(showtextdb)
+library(showtext)
+font_add("LM Roman 10", "./lmroman10-regular.otf")
+showtext_auto()
 ```
 
+## Agenda
+-   Introduction
+-   Problem and Hypothesis 
+-   Data Analysis Process    
+-   Findings 
+-   Limitations
+-   Reccomendations 
+-   Benefits
+
+
+## Introduction
+-   Graduate MSDA Student
+-   Undergraduate Mathematics
+-   Worked as Analyst for 13 Years
+	- Linguistic Analysis
+	- Intelligence Analysis
+	- Signals Analysis
+	
+	
+## Problem
+- Network Intrusion Detection Systems (NIDS)
+	- Signature Detection
+	- Anomaly Detection
+- PCAP vs Zeek
+- Machine Learning
+	- Agglomerative Hierarchical Clustering
+[@mazarbhuiya2019], [@andrews2019]
+
+## Hypothesis
+- Assume Status Quo
+	- No NIDS
+	- No PCAP
+	
+$H_0$: A hierarchical clustering analysis of Zeek logs cannot reveal anomalous network behavior.
+
+$H_A$: A hierarchical clustering analysis of Zeek logs can reveal anomalous network behavior.
+
+[@sikos2020]
+
+
+## Data Analysis Process
+-   Data Collection and Preparation
+-   Data Analysis
+
+
+## Data Collection and Preparation
+- Need Good Data
+	- Zeek logs
+	- Active Users
+	- Hosted Services
+	- Compromised
+	
+	
+[@zhang2010]
+
+
+## Data Collection
+- U.S. Army Cyber Command (ARCYBER) 
+  - Integrated Data Division (ID2)
+- Approved for Release
+- Extracted from the Gabriel Nimbus (GN)
+- Transferred to a Private Server
+	
+[@brust2021]
+
+
+## Data Preparation
+- Raw Data
+	- 23,747 Observations across 98 features
+	- Seven Types of Logs
+		- conn, dns, files, http, ssh, ssl, and weird 
+- Subsetted Connectivity Logs
+	- 10,726 Observations across 4 features
+	- destination.packets, destination.port, source.packets, and source.port
+	- 0% Sparse 
+	
+	[@thezeekproject]
+	
+	
+## Data Preparation
+- Scale Data
+- Outliers Remain
+
+[@mazarbhuiya2019]
+
+## Analysis: Linkage Method
+
+- Dissimilarity Matrix
+- Linkage Methods
+	- Single Linkage, Average Linkage, Complete Linkage, Ward's Method.
+
+```{r AC Comparison, echo=FALSE}
+ac.colname <- c("Average AC", "Single AC", "Complete AC", "Ward’s AC")
+ac.data    <- c(0.9999928, 0.9999898, 0.9999935, 0.9999964)
+ac         <- as.data.frame(t(ac.data))
+  
+knitr::kable(ac, caption = "Agglomerative Coefficient Comparison", col.names = ac.colname) %>%
+   kable_styling(full_width = TRUE, latex_options = c("striped", "hold_position"))
+```
+
+## Analysis: Number of Clusters
+
+```{r PRES-Silhouette, echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
+df <- read_csv('./zeek.csv', col_names = TRUE, show_col_types = FALSE)
+
+df.conn.scaled <- df %>% 
+  filter(bdp.ingest.file.name == "conn.log") %>%
+  select(destination.packets, destination.port, source.packets, source.port) %>%
+  scale()
+
+exsum.silhouette <- fviz_nbclust(df.conn.scaled, FUN = hcut, 
+                      method = "silhouette", k.max = 10) +
+                      labs(title = "Figure 1: Average Silhouette Width") +
+                      theme_dark() +
+                      theme(text = element_text(family = "LM Roman 10"))
+
+exsum.silhouette
+```
+
+[@lengyel2019]
+
+
+## Analysis: Cluster Membership
+
+```{r PRES-Two-Cluster Membership Calc, echo=FALSE, cache=TRUE, fig.showtext=TRUE}
+library(cluster)
+df.conn.dist <- dist(df.conn.scaled, method = "euclidean")
+hc.ward      <- agnes(df.conn.dist, method = "ward")
+clust.2      <- cutree(hc.ward, k = 2)
+```
+
+```{r PRES-Two-Cluster Membership Viz, echo=FALSE, cache=TRUE, fig.showtext=TRUE}
+fviz_cluster(list(data = df.conn.scaled, cluster = clust.2), geom = "point",
+  font.family = "LM Roman 10") +
+  labs(title = "Figure 2: Two-Cluster Observation Membership Plot", y=NULL, x=NULL) +
+  annotate("text", x = -4, y = -35, label = "Anomalous Network Traffic") +
+  annotate("text", x = -7.5, y = -4.5, label = "Normal Network Traffic") +
+  theme_dark() +
+  theme(text = element_text(family = "LM Roman 10"))
+```
+
+## Analysis: Cluster Assessment
+
+- Cluster 1: 0.9686805
+- Cluster 2: 0.9870862
+
+[@rousseeuw1987]
+
+## Findings: Summary
+
+- Project Goals:
+	- Isolate Anomalous Traffic as IoC
+
+- Agglomerative Coefficients: > 0.9
+- Average Silhouette Width: > 0.9
+- Ward's Method
+- Anomoly Density: 0.02% of Total Observations
+
+## Interpretation
+
+- Reject the Null Hypothesis
+
+## Limitations
+
+- Technique Limitation
+	- Not equivalent to threat identification
+	- Further Investigation Required
+
+- Tool Limitation
+	- Computational Cost
+	- SageMaker instances increase > 15% 
+	- Can't Usually Narrow Scope
+
+[@amazonwebservices2022], [@zhang2019]
+
+
+## AWS Costs Table
+
+```{r AWS Cost Comparison, echo=FALSE}
+aws.colname <- c("Base Specifications", "Upgraded Specifications")
+aws.rowname <- c("vCPU", "Memory", "Clock Speed", "GPU", "NIC", "Storage", "GPU Memory", "Monthly Cost")
+aws.before  <- c("4", "16 GB", "3.1 GHz", "N/A", "5 Gb", "EBS Only", "N/A", "$620.68")
+aws.after   <- c("8", "32 GB", "2.5 GHz", "1", "25 Gb", "225 GB NVMe", "16 GB", "$713.18")
+aws         <- as.data.frame(cbind(aws.before, aws.after), row.names = aws.rowname)
+
+knitr::kable(aws, caption = "AWS SageMaker Cost/Specification Comparison", 
+	col.names = aws.colname) %>%
+  kable_styling(full_width = TRUE, latex_options = c("striped", "hold_position"))
+```
+
+## Proposed Actions
+
+A summary of proposed actions:
+
+- Implement Machine Learning
+
+- Forward Results
+
+## Benefits
+
+Expected benefits of the study (be as specific and quantitative as possible):
+ 
+- Increased Options
+
+- Reduced Human Resources Required
+
+
+## Increased Options Availability
+
+- NIDS & Forensic Packet Analysis Strength
+- Zeek
+	- Practical
+	- Opens Doors
+
+[@sikos2020]
+
+
+## Reduced Human Resource Requirements
+
+- Provides Focus
+	- Reduced Noise by 99.98%
+- Save 1,787 Hours of Work
+- Reduces MTTI by over a Month
+
+[@mohit2022]
